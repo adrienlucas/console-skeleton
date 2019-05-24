@@ -1,0 +1,46 @@
+#!/usr/bin/env php
+<?php
+
+use Symfony\Component\Config\FileLocator;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Loader\FileLoader;
+use Symfony\Component\DependencyInjection\Loader\GlobFileLoader;
+use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+require __DIR__.'/vendor/autoload.php';
+
+$containerBuilder = new ContainerBuilder();
+$containerBuilder->addCompilerPass(new AddConsoleCommandPass(), PassConfig::TYPE_BEFORE_REMOVING);
+
+$containerBuilder->registerForAutoconfiguration(Command::class)
+    ->addTag('console.command');
+
+$containerBuilder->autowire('application', Application::class)
+    ->addMethodCall('setCommandLoader', [new Reference('console.command_loader')])
+    ->addMethodCall('setDispatcher', [new Reference(EventDispatcherInterface::class)])
+    ->setPublic(true);
+
+$containerBuilder->autowire(EventDispatcherInterface::class, EventDispatcher::class);
+
+$loader = new GlobFileLoader($containerBuilder, new FileLocator(__DIR__.'/src'));
+
+$definition = new Definition();
+$definition
+    ->setAutowired(true)
+    ->setAutoconfigured(true)
+    ->setPublic(false);
+
+$loader->registerClasses($definition, 'Application\\', __DIR__.'/src/*');
+
+$containerBuilder->compile();
+
+$containerBuilder
+    ->get('application')
+    ->run();
